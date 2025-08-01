@@ -1,14 +1,24 @@
 -- db/setup.sql
--- This script will create a sample table in your PostgreSQL database.
--- It is designed to be run against the database 'expense_tracker_app'.
 
-CREATE TABLE IF NOT EXISTS sample_items (
+-- users table setup
+CREATE TABLE IF NOT EXISTS users (
     id SERIAL PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    description TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
-);
+    username TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL
+)
+-- accounts table setup
+CREATE TABLE IF NOT EXISTS accounts (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    name TEXT not null
+)
 
--- Optional: Insert some sample data
--- INSERT INTO sample_items (name, description) VALUES ('First Item', 'This is the description for the first item.');
--- INSERT INTO sample_items (name, description) VALUES ('Second Item', 'Another sample item.');
+CREATE TABLE IF NOT EXISTS expenses (
+    id SERIAL PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    account id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    description TEXT NOT NULL,
+    amount NUMERIC(10, 2) NOT NULL,
+    date DATE NOT NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+)
