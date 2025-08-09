@@ -22,3 +22,13 @@ CREATE TABLE IF NOT EXISTS expenses (
     date DATE NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW()
 )
+
+-- For express-session with connect-pg-simple
+CREATE TABLE "session" (
+    "sid" varchar NOT NULL COLLATE "default",
+    "sess" json NOT NULL,
+    "expire" timestamp(6) NOT NULL
+)
+WITH (OIDS=FALSE);
+ALTER TABLE "session" ADD CONSTRAINT "session_pkey" PRIMARY KEY ("sid") NOT DEFERRABLE INITALLY IMMEDIATE;
+CREATE INDEX "IDX_session_expire" ON "session" ("expire");

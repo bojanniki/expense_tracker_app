@@ -4,10 +4,22 @@ const path = require("path");
 const { Pool } = require("pg");
 require("dotenv").config(); // Load environment variables from .env file
 const bcrypt = require("bcrypt");
+const session = require("express-session");
+const pgSession = require("connect-pg-simple")(session);
 
 //Middleware to parse JSON bodies
 app.use(express.json());
 
+//configure and use express-session middleware
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET, // A secret key for signing the session ID cookie
+    store: sessionStore, //use the postgresql session store
+    resave: false, //don't save session if unmodified
+    saveUninitialized: false, //don't create session until something is stored
+    cookie: { maxAge: 30 * 24 * 60 * 60 * 1000 }, //30 days
+  })
+);
 const app = express();
 const port = process.env.PORT || 3000;
 
@@ -18,6 +30,12 @@ const pool = new Pool({
   database: process.env.DB_NAME || "expense_tracker_app", // Use the dynamically created database name
   password: process.env.DB_PASSWORD || "your_db_app_password",
   port: process.env.DB_PORT || 5432,
+});
+
+//create a session store using connect-pg-simple
+const sessionStore = new pgSession({
+  pool: pool,
+  tableName: "session",
 });
 
 // Test DB connection (optional, good for initial setup)
