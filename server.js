@@ -2,24 +2,13 @@ const express = require("express");
 const dotenv = require("dotenv");
 const path = require("path");
 const { Pool } = require("pg");
-require("dotenv").config(); // Load environment variables from .env file
 const bcrypt = require("bcrypt");
 const session = require("express-session");
 const pgSession = require("connect-pg-simple")(session);
 
-//Middleware to parse JSON bodies
-app.use(express.json());
+//Load enviroment variables from .env file
+dotenv.config();
 
-//configure and use express-session middleware
-app.use(
-  session({
-    secret: process.env.SESSION_SECRET, // A secret key for signing the session ID cookie
-    store: sessionStore, //use the postgresql session store
-    resave: false, //don't save session if unmodified
-    saveUninitialized: false, //don't create session until something is stored
-    cookie: { maxAge: 30 * 24 * 60 * 60 * 1000 }, //30 days
-  })
-);
 const app = express();
 const port = process.env.PORT || 3000;
 
@@ -52,13 +41,26 @@ pool.connect((err, client, release) => {
   });
 });
 
+//Middleware setup
+
+//Middleware to parse JSON bodies
+app.use(express.json());
+
+//configure and use express-session middleware
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET, // A secret key for signing the session ID cookie
+    store: sessionStore, //use the postgresql session store
+    resave: false, //don't save session if unmodified
+    saveUninitialized: false, //don't create session until something is stored
+    cookie: { maxAge: 30 * 24 * 60 * 60 * 1000 }, //30 days
+  })
+);
+
 // Serve static files from the 'public' directory
 app.use(express.static(path.join(__dirname, "public")));
 
-// Catch-all to serve index.html for any other routes (SPA-like behavior)
-app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"));
-});
+//API routes
 
 // Route for user registration
 app.post("/api/register", async (req, res) => {
@@ -90,7 +92,7 @@ app.post("/api/register", async (req, res) => {
 
 //user login route
 
-app.post("api/login", async (req, res) => {
+app.post("/api/login", async (req, res) => {
   const { username, password } = req.body;
   try {
     //find the user by username
@@ -110,13 +112,46 @@ app.post("api/login", async (req, res) => {
     if (!isMatch) {
       return res.status(401).send("Invalid credentials");
     }
-    //login successful
-    res.status(200).send("Login successful!");
+    //login successful. Save the user's ID in the session
+    req.session.userId = storedUser.id;
+    res
+      .status(200)
+      .json({ message: "Login succesful!", userId: storedUser.id });
   } catch (err) {
     console.error(err);
     res.status(500).send("Server error");
   }
 });
+
+//Protected route to het the user's profile
+app.get("/api/profile", async (req, res) => {
+  //check if the user is authenticated (if a userId exists in the session)
+  if (!req.session.userId) {
+    return res.status(401).send("Unauthorized");
+  }
+  try {
+    const user = await pool.query("SELECT username FROM users WHERE id = $1", [
+      req.session.userId,
+    ]);
+    if (user.rows.length === 0) {
+      return res.status(404).send("User not found");
+    }
+    res.status(200).json({
+      username: user.rows[0].username,
+      message: "You are logged in!",
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Server error");
+  }
+});
+
+// Catch-all to serve index.html for any other routes (SPA-like behavior)
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
+//Server Start
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
   console.log("Press Ctrl+C to stop");
