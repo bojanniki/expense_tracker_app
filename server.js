@@ -146,6 +146,21 @@ app.get("/api/profile", async (req, res) => {
   }
 });
 
+//route for user logout
+app.post("/api/logout", (req, res) => {
+  //check if the session exists and destroy it
+  if (req.session) {
+    req.session.destroy((err) => {
+      if (err) {
+        return res.status(500).send("Could not log out");
+      }
+      res.status(200).send("Logged out successfully");
+    });
+  } else {
+    res.status(200).send("No session to destroy");
+  }
+});
+
 // Catch-all to serve index.html for any other routes (SPA-like behavior)
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));

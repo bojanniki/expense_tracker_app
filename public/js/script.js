@@ -72,3 +72,52 @@ loginForm.addEventListener("submit", async (e) => {
     loginMessage.textContent = "An error occurred. Please try again.";
   }
 });
+
+//get the logout button element
+
+const logoutButton = document.getElementById("logout-button");
+
+//function to check authentication status on page load
+
+const checkAuthStatus = async () = > {
+    try {
+        const response = await fetch ("/api/profile");
+        if (response.ok) {
+            const data = await response.json();
+            authContainer.style.display = "none";
+            dashboard.style.display = "block";
+            welcomeUsername.textContent = data.username;
+        } else {
+            //user is not logged in, show auth forms
+            authContainer.style.display = "block";
+            dashboard.style.display = "none";
+        }
+    } catch (err) {
+        console.error("Error checking auth status:", err);
+        //fallback to showin login forms on any error
+        authContainer.style.display = "block";
+        dashboard.style.display = "none";
+    }
+};
+
+//event listener for the log out button
+logoutButton.addEventListener("click" async () => {
+    try {
+        const response = await fetch ("/api/logout", {
+            method:"POST",
+        });
+        if(response.ok) {
+            //logout successful 
+            authContainer.style.display = "block"; //Show the auth forms
+            dashboard.style.display = "none"; //Hide the dashboard
+            welcomeUsername.textContent = ""; //clear the username
+            loginMessage.textContent = "You have logged out.";
+            loginMessage.style.color = "green";
+
+        } else {
+            console.error("Logout failed");
+        }
+    } catch (err) {
+        console.error ("An error occurred during logout:", err);
+    }
+});
