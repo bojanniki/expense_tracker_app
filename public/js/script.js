@@ -79,9 +79,10 @@ const logoutButton = document.getElementById("logout-button");
 
 //function to check authentication status on page load
 
-const checkAuthStatus = async () = > {
+const checkAuthStatus = async () => {
     try {
         const response = await fetch ("/api/profile");
+
         if (response.ok) {
             const data = await response.json();
             authContainer.style.display = "none";

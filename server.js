@@ -161,6 +161,44 @@ app.post("/api/logout", (req, res) => {
   }
 });
 
+// Account API routes
+
+//GET route to fetch al accounts for the logged-in user
+
+app.get("/api/accounts", async (req, res) => {
+  if (!req.session.userId) {
+    return res.status(401).send("Unauthorized");
+  }
+
+  try {
+    const accounts = await pool.query(
+      "SELECT * FROM accounts WHERE user_id = $1 ORDER BY account_name ASC",
+      req.session.userId
+    );
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Server error");
+  }
+});
+
+//POST route to create a new account for the logged-in user
+app.post("/api/accounts", async (req, res) => {
+  //check if the user is authenticated
+  if (!req.session.userId) {
+    return res.status(401).send("Unauthorized");
+  }
+  try {
+    await pool.query(
+      "INSERT INTO accounts (user_id, account_name) VALUES ($1, $2)",
+      [req.session.userId, account_name]
+    );
+    res.status(201).send("Account created successfully");
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Server error");
+  }
+});
+
 // Catch-all to serve index.html for any other routes (SPA-like behavior)
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
