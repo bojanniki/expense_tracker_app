@@ -244,6 +244,61 @@ app.post("/api/expenses", async (req, res) => {
   }
 });
 
+//DELETE route to dete a specific expense
+
+app.delete("/api(expenses/:id", async (req, res) => {
+  //check if the user is authenticated
+  if (!req.session.userId) {
+    return res.status(401).send("Unauthorized");
+  }
+  const expenseId = req.params.id;
+  try {
+    //Delete the expense but only if it belongs to the authenticated user
+    const result = await pool.query(
+      "DELETE FROM expenses WHERE id= $1 AND user_id = $2 RETURNING *",
+      [expenseId, req.session.userId]
+    );
+    if (result.rows.length === 0) {
+      //No rows were deleted, meaning the expense was not found or it did not belong to the user
+      return res.status(404).send("Expense not found or unauthorized");
+    }
+    res.status(200).send("Expense deleted successfully");
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Server error");
+  }
+});
+
+//PUT route to update a specific expense
+app.put("/api/expenses/:id", async (req, res) => {
+  //Check if the user is authenticated
+  if (!req.session.userId) {
+    return res.status(401).send("Unauthorized");
+  }
+  const expenseId = req.params.id;
+  const { account_id, description, amount, date } = req.body;
+
+  //basic validation
+  if (!account_id || !description || !amount || !date) {
+    return res.status(400).send("All expense fields are required");
+  }
+  try {
+    //update the expense, but only if it belongs to the authenticated user
+    const result = await pool.query(
+      "UPDATE expenses SET account_id = $1, description = $2, amount = $3, date = $4 WHERE id = $5 AND user_id = $6 RETURNING ",
+      [account_id, description, amount, date, expenseId, req.session.userId]
+    );
+    if (result.rows.length === 0) {
+      //no rows were updated, meaning the expense was not found or didn't belong to the user
+      return res.status(404).send("Expense for found or unauthorized");
+    }
+    return res.status(200).send("Expense updated successfully");
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Server error");
+  }
+});
+
 // Catch-all to serve index.html for any other routes (SPA-like behavior)
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
