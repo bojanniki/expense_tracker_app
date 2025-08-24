@@ -163,7 +163,7 @@ app.post("/api/logout", (req, res) => {
 
 // Account API routes
 
-//GET route to fetch al accounts for the logged-in user
+//GET route to fetch all accounts for the logged-in user
 
 app.get("/api/accounts", async (req, res) => {
   if (!req.session.userId) {
@@ -193,6 +193,51 @@ app.post("/api/accounts", async (req, res) => {
       [req.session.userId, account_name]
     );
     res.status(201).send("Account created successfully");
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Server error");
+  }
+});
+
+// --- Expense API routes --- //
+
+//GET route to fetch all expenses for the logged-in user
+
+app.get("/api/expenses", async (req, res) => {
+  // Check if the user is authenticated
+  if (!req.session.userId) {
+    return res.status(401).send("Unauthorized");
+  }
+  try {
+    //Query to get all expenses for the user, ordered by date
+    const expenses = await pool.query(
+      "SELECT * FROM expenses WHERE user_id = $1 ORDER BY date DESC",
+      [req.session.userId]
+    );
+    res.status("200").json(expenses.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).send("Server error");
+  }
+});
+
+//POST route to create a new expense for the logged-in user
+app.post("/api/expenses", async (req, res) => {
+  //check if the user is authenticated
+  if (!req.session.userId) {
+    return res.status(401).send("Unauthorized");
+  }
+  const { account_id, description, amount, date } = req.body;
+  //Basic validation
+  if (!account_id || !description || !amount || !date) {
+    return res.status(400).send("All expense fields are required.");
+  }
+  try {
+    await pool.query(
+      "INSERT INTO expenses (user_id, account_id, description, amount, date) VALUES ($1, $2, $3, $4, $5)",
+      [req.session.userId, account_id, description, amount, date]
+    );
+    res.status(201).send("Expense added successfully");
   } catch (err) {
     console.error(err);
     res.status(500).send("Server error");
