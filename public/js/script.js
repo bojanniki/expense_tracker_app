@@ -8,6 +8,8 @@ const loginMessage = document.getElementById("login-message");
 const accountsList = document.getElementById("accounts-list");
 const addAccountForm = document.getElementById("add-account-form");
 const expenseAccountSelect = document.getElementById("expense-account");
+const addExpenseForm = document.getElementById("add-expense-form");
+const expensesList = document.getElementById("expenses-list");
 
 //function to fetch and display accounts 
 const fetchAccounts = async () => {
@@ -57,6 +59,61 @@ addAccountForm.addEventListener("submit", async(e) => {
   }
 });
 
+//function to fetch and display expenses
+
+const fetchExpenses = async () => {
+  try {
+    const response = await fetch ("/api/expenses");
+    if(response.ok) {
+      const expenses = await response.json();
+      expensesList.innerHTML = ""; //clear the list before repopulating
+
+      //Loop through each expense and create a HTML element
+      expenses.forEach(expense => {
+        const li = document.createElement("li");
+        li.innerHTML = `
+                    <span>${expense.description}</span>
+                    <span>$${expense.amount.toFixed(2)}</span>
+                    <span>${new Date(expense.date).toLocaleDateString()}</span>
+                    <span>(Account ID: ${expense.account_id})</span>
+                    <button class="edit-button" data-id="${expense.id}">Edit</button>
+                    <button class="delete-button" data-id="${expense.id}">Delete</button>
+                `;
+                expensesList.appendChild(li);
+      });
+      
+    }
+  }catch (err) {
+    console.error("Failed to fetch expenses:", err);
+  }
+};
+
+//event listener for the add-expense form
+addExpenseForm.addEventListener("submit", async(e) => {
+  e.preventDefault();
+
+  const description = document.getElementById("expense-description").value;
+  const amount = parseFloat(document.getElementById("expense-amount").value);
+  const date = document.getElementById("expense-account").value;
+
+  try {
+    const response = await fetch("/api/expenses" , {
+      method:"POST",
+      headers: {"Content-Type: application/json"},
+      body:JSON.stringify({description, amount, date, account_id}),
+    });
+    if(response) {
+      //if the expense was added succesfully, refresh the list 
+      fetchExpenses();
+      addExpenseForm.reset(); //clear the form
+    } else {
+      const message = await response.text();
+      console.error("Failed to add expense:", message);
+    }
+  } catch (err) {
+    console.error("An error occured while adding expense:", err);
+  }
+});
 //elements for the dashboard
 const authContainer = document.getElementById("auth-container");
 const dashboard = document.getElementById("dashboard");
@@ -142,6 +199,8 @@ const checkAuthStatus = async () => {
 
             //NEW: fetch and display accounts and expenses
             fetchAccounts();
+            //NEW: fetch and display expenses
+            fetchExpenses();
         } else {
             //user is not logged in, show auth forms
             authContainer.style.display = "block";
