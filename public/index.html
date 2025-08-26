@@ -42,6 +42,39 @@
       <h2>Welcome <span id="welcome-username"></span>!</h2>
       <p id="status-message"></p>
       <button id="logout-button">Logout</button>
+      <hr />
+      <h3>Your accounts</h3>
+      <ul id="accounts-list"></ul>
+      <form id="add-account-form">
+        <input
+          type="text"
+          id="account-name"
+          placeholder="Account Name"
+          required
+        />
+        <button type="submit">Add account</button>
+      </form>
+      <hr />
+      <h3>Your Expenses</h3>
+      <form id="add-expense-form">
+        <input
+          type="text"
+          id="expense-description"
+          placeholder="Description"
+          required
+        />
+        <input
+          type="number"
+          id="expense-amount"
+          placeholder="Amount"
+          step="0.01"
+          required
+        />
+        <input type="date" id="expense-date" required />
+        <select id="expense-account" required></select>
+        <button type="submit">Add Expense</button>
+      </form>
+      <ul id="expenses-list"></ul>
     </div>
     <script src="/js/script.js"></script>
   </body>
