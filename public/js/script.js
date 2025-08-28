@@ -5,11 +5,23 @@ const registrationForm = document.getElementById("registration-form");
 const loginForm = document.getElementById("login-form");
 const regMessage = document.getElementById("reg-message");
 const loginMessage = document.getElementById("login-message");
+
+//elements for the dashboard
+const authContainer = document.getElementById("auth-container");
+const dashboard = document.getElementById("dashboard");
+const welcomeUsername = document.getElementById("welcome-username");
+const logoutButton = document.getElementById("logout-button");
+
+//elements fro the accounts and expenses
 const accountsList = document.getElementById("accounts-list");
 const addAccountForm = document.getElementById("add-account-form");
 const expenseAccountSelect = document.getElementById("expense-account");
 const addExpenseForm = document.getElementById("add-expense-form");
 const expensesList = document.getElementById("expenses-list");
+const addExpenseButton = addExpenseForm.querySelector('button[type="submit"]');
+
+//a global variable to track the expense being edited
+let editingExpenseId = null;
 
 //function to fetch and display accounts 
 const fetchAccounts = async () => {
@@ -57,6 +69,96 @@ addAccountForm.addEventListener("submit", async(e) => {
   } catch(err) {
     console.error("An error occured while adding account:", err);
   }
+});
+
+//event listener for the add/update expense form
+addExpenseForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+
+  const description = document.getElementById("expense-description").value;
+  const amount = parseFloat(document.getElementById("expense-amount").value);
+  const date = document.getElementById("expense-date").value;
+  const account_id = document.getElementById("expense-account").value;
+
+  const expenseData = {
+    description,
+    amount,
+    date,
+    account_id,
+  };
+  let response;
+  try {
+    if(editingExpenseId) {
+      //if we have an ID, we are updating (PUT request)
+      response = await fetch("/api/expenses/${editingExpenseId}", {
+        method: "PUT",
+        headers:  {"Content-Type": "application/json"},
+        body: JSON.stringify(expenseData),
+      });
+    }
+    if(response.ok){
+      fetchExpenses();
+      addExpenseForm.reset();
+      editingExpenseId=null;
+      addExpenseButton.textContent = "Add Expense";
+    } else {
+      const message = await response.text();
+      console.error("Failed to save expense:", message);
+    }
+  } catch(err) {
+    console.error("An error occurred while saving expense:", err);
+  }
+});
+
+//event listener for delete and edit buttons using event delegation
+expensesList.addEventListener("click", async (e) => {
+  //check if the clicked element has the delete button class
+  if(e.target.classList.contains("delete-button")) {
+    const expenseId = e.target.dataset.id;
+    try {
+      const response = await fetch("/api/expenses/${expenseId}", {
+        method:"DELETE",
+      });
+      if(response.ok) {
+        fetchExpenses(); //refresh the list
+      } else {
+        console.error("Failed to delete expense");
+      }
+    } catch(err) {
+      console.error("An error occurred during deletion", err);
+    }
+  }
+
+  //check if the clicked element has the edit-button class
+  if(e.target.classList.contains("edit-button")) {
+    const expenseId = e.target.dataset.id;
+    //find the expense data from the list
+    const expenseToEdit = Array.from(expensesList.children).find(li => {
+      const button = li.querySelector(".edit-button");
+      return button && button.dataset.id === expenseId;
+    });
+    if(expenseToEdit) {
+      //get the data from the list item
+      const description = expenseToEdit.querySelector("span:nth-child(1)").textContent;
+      const amount = parseFloat(expenseToEdit.querySelector("span:nth-child(2)").textContent.substring(1));
+      const date = expenseToEdit.querySelector("span:nth-child(3)").textContent;
+      const accountId = expenseToEdit.querySelector("span:nth-child(4)").textContent.split("")[2].replace(")", "");
+
+      //populate the form with the expense data
+      document.getElementById("expense-description").value = description;
+      document.getElementById("expense-amount").value = amount;
+      document.getElementById("expense-date").value = date;
+      document.getElementById("expense-account").value = accountId;
+
+      //update the global state and form button
+      editingExpenseId=expenseId;
+      addExpenseButton.textContent = "Update Expense";
+
+      //scroll to the form 
+      addExpenseForm.scrollIntoView({behavior:"smooth"});
+    }
+  }
+
 });
 
 //function to fetch and display expenses
@@ -114,10 +216,7 @@ addExpenseForm.addEventListener("submit", async(e) => {
     console.error("An error occured while adding expense:", err);
   }
 });
-//elements for the dashboard
-const authContainer = document.getElementById("auth-container");
-const dashboard = document.getElementById("dashboard");
-const welcomeUsername = document.getElementById("welcome-username");
+
 
 //event listener for registration form submission
 registrationForm.addEventListener("submit", async (e) => {
@@ -149,6 +248,9 @@ registrationForm.addEventListener("submit", async (e) => {
   }
 });
 
+//call the function on page load
+checkAuthStatus();
+
 //event listener for login form submission
 
 loginForm.addEventListener("submit", async (e) => {
@@ -167,7 +269,8 @@ loginForm.addEventListener("submit", async (e) => {
     if (response.ok) {
       //Login successful!
       loginMessage.textContent = "";
-      authContainer.style.display = "none"; //hide the login/register forms
+      authContainer.style.display = "none";
+      checkAuthStatus(); //hide the login/register forms
       dashboard.style.display = "block"; //Show the dashboard
       welcomeUsername.textContent = data.username; //update the welcome message
     } else {
@@ -181,9 +284,6 @@ loginForm.addEventListener("submit", async (e) => {
   }
 });
 
-//get the logout button element
-
-const logoutButton = document.getElementById("logout-button");
 
 //function to check authentication status on page load, updated to call fetchAccounts on success
 
@@ -215,13 +315,14 @@ const checkAuthStatus = async () => {
 };
 checkAuthStatus();
 //event listener for the log out button
-logoutButton.addEventListener("click" async () => {
+logoutButton.addEventListener("click",  async () => {
     try {
         const response = await fetch ("/api/logout", {
             method:"POST",
         });
         if(response.ok) {
             //logout successful 
+            checkAuthStatus();
             authContainer.style.display = "block"; //Show the auth forms
             dashboard.style.display = "none"; //Hide the dashboard
             welcomeUsername.textContent = ""; //clear the username
