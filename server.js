@@ -232,37 +232,59 @@ app.post("/api/expenses", async (req, res) => {
   if (!account_id || !description || !amount || !date) {
     return res.status(400).send("All expense fields are required.");
   }
+  //Convert amount to a number
+  const numericAmount = parseFloat(amount);
+  if (isNaN(numericAmount)) {
+    return res.status(400).send("Amount must be a valid number");
+  }
   try {
     await pool.query(
       "INSERT INTO expenses (user_id, account_id, description, amount, date) VALUES ($1, $2, $3, $4, $5)",
       [req.session.userId, account_id, description, amount, date]
     );
-    res.status(201).send("Expense added successfully");
+    //update the balance of the associated account
+    await pool.query(
+      "UPDATE accounts SET balance = balance - $1 WHERE id=$2 AND user_id = $3",
+      [numericAmount, account_id, req.session.userId]
+    );
+    res
+      .status(201)
+      .send(
+        "Expense added successfully and account balance updated succesfully"
+      );
   } catch (err) {
     console.error(err);
     res.status(500).send("Server error");
   }
 });
 
-//DELETE route to dete a specific expense
-
-app.delete("/api(expenses/:id", async (req, res) => {
+//DELETE route to delete a specific expense
+app.delete("/api/expenses/:id", async (req, res) => {
   //check if the user is authenticated
   if (!req.session.userId) {
     return res.status(401).send("Unauthorized");
   }
+
   const expenseId = req.params.id;
   try {
-    //Delete the expense but only if it belongs to the authenticated user
-    const result = await pool.query(
-      "DELETE FROM expenses WHERE id= $1 AND user_id = $2 RETURNING *",
+    //first, get the expense, update the account balance
+    const expenseToDelete = await pool.query(
+      "SELECT amount, account_id FROM expenses WHERE id = $1AND  user_id = $2",
       [expenseId, req.session.userId]
     );
-    if (result.rows.length === 0) {
-      //No rows were deleted, meaning the expense was not found or it did not belong to the user
+    if (expenseToDelete.rows.length === 0) {
       return res.status(404).send("Expense not found or unauthorized");
     }
-    res.status(200).send("Expense deleted successfully");
+    const { amount, account_id } = expenseToDelete.rows[0];
+    await pool.query("DELETE FROM EXPENSES WHERE id=$1", [expenseId]);
+    //add the amount back to the account balance
+    await pool.query(
+      "UPDATE accounts SET balance = balance + $1 WHERE id = $2",
+      [amount, account_id]
+    );
+    res
+      .status(200)
+      .send("Expense deleted and account balance updated successfully");
   } catch (err) {
     console.error(err);
     res.status(500).send("Server error");
@@ -282,20 +304,48 @@ app.put("/api/expenses/:id", async (req, res) => {
   if (!account_id || !description || !amount || !date) {
     return res.status(400).send("All expense fields are required");
   }
+  const numericAmount = parseFloat(amount);
+  if (isNaN(numericAmount)) {
+    return res.status(400).send("Amount must be a valid number.");
+  }
   try {
-    //update the expense, but only if it belongs to the authenticated user
+    //1. get the old expense data to adjust the balance correctly
+    const oldExpense = await pool.query(
+      "SELECT amount, account_id FROM expenses WHERE id= $1 AND user_id = $2",
+      [expenseId, req.session.userId]
+    );
+    if (oldExpense.rows.length === 0) {
+      return res.status(404).send("Expense not found or unauthorized");
+    }
+    const { amount: oldAmount, account_id: oldAccountId } = oldExpense.rows[0];
+    //2. Adjust the balance of the old account by adding the old amount back.
+    await pool.query(
+      "UPDATE accounts SET balance = balance + $1 WHERE id = $2",
+      [oldAmount, oldAccountId]
+    );
+    //3. Update the expense with the new data.
     const result = await pool.query(
-      "UPDATE expenses SET account_id = $1, description = $2, amount = $3, date = $4 WHERE id = $5 AND user_id = $6 RETURNING ",
-      [account_id, description, amount, date, expenseId, req.session.userId]
+      "UPDATE expenses SET account_id = $1, description = $2, amount = $3, date = $4 WHERE id = $5 AND user_id=$6 RETURNING *",
+      [
+        account_id,
+        description,
+        numericAmount,
+        date,
+        expenseId,
+        req.session.userId,
+      ]
+    );
+    //4. Subtract the new ammount from the new account's balance.
+    await pool.query(
+      "UPDATE accounts SET balance = balance - $1 WHERE id = $2",
+      [numericAmount, account_id]
     );
     if (result.rows.length === 0) {
-      //no rows were updated, meaning the expense was not found or didn't belong to the user
-      return res.status(404).send("Expense for found or unauthorized");
+      return res.status(404).send("Expense not found or unauthorized.");
     }
-    return res.status(200).send("Expense updated successfully");
+    res.status(200).send("Expense updated and account balance adjusted!");
   } catch (err) {
     console.error(err);
-    res.status(500).send("Server error");
   }
 });
 
