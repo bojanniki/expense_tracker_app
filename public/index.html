@@ -36,6 +36,8 @@
           placeholder="Password"
           required
         />
+        <button type="submit">Login</button>
+        <p id="login-message"></p>
       </form>
     </div>
     <div id="dashboard" style="display: none">
@@ -50,6 +52,13 @@
           type="text"
           id="account-name"
           placeholder="Account Name"
+          required
+        />
+        <input
+          type="number"
+          id="account-balance"
+          placeholder="Initial Balance"
+          step="0.01"
           required
         />
         <button type="submit">Add account</button>
@@ -71,8 +80,8 @@
           required
         />
         <input type="date" id="expense-date" required />
-        <select id="expense-account" required></select>
-        <button type="submit">Add Expense</button>
+        <select id="expense-account-id" required></select>
+        <button type="submit" id="add-expense-button">Add Expense</button>
       </form>
       <ul id="expenses-list"></ul>
     </div>

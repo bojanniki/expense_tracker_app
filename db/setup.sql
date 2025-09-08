@@ -7,12 +7,12 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash TEXT NOT NULL
 );  -- FIX 1: Add a semicolon
 
--- accounts table setup
-CREATE TABLE IF NOT EXISTS accounts (
+CREATE TABLE accounts (
     id SERIAL PRIMARY KEY,
-    user_id INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-    name TEXT not null
-);  -- FIX 1: Add a semicolon
+    user_id INT NOT NULL REFERENCES users(id),
+    account_name VARCHAR(255) NOT NULL,
+    balance DECIMAL(10, 2) DEFAULT 0.00
+);
 
 -- expenses table setup
 CREATE TABLE IF NOT EXISTS expenses (

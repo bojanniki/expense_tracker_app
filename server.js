@@ -171,28 +171,20 @@ app.get("/api/accounts", async (req, res) => {
   }
 
   try {
-    const accounts = await pool.query(
+    const accountsResult = await pool.query(
       "SELECT * FROM accounts WHERE user_id = $1 ORDER BY account_name ASC",
-      req.session.userId
+      [req.session.userId]
     );
-  } catch (err) {
-    console.error(err);
-    res.status(500).send("Server error");
-  }
-});
 
-//POST route to create a new account for the logged-in user
-app.post("/api/accounts", async (req, res) => {
-  //check if the user is authenticated
-  if (!req.session.userId) {
-    return res.status(401).send("Unauthorized");
-  }
-  try {
-    await pool.query(
-      "INSERT INTO accounts (user_id, account_name) VALUES ($1, $2)",
-      [req.session.userId, account_name]
-    );
-    res.status(201).send("Account created successfully");
+    // Convert balance from string to a number for frontend consumption
+    const accounts = accountsResult.rows.map((account) => {
+      return {
+        ...account,
+        balance: parseFloat(account.balance),
+      };
+    });
+
+    res.status(200).json(accounts);
   } catch (err) {
     console.error(err);
     res.status(500).send("Server error");
@@ -204,54 +196,96 @@ app.post("/api/accounts", async (req, res) => {
 //GET route to fetch all expenses for the logged-in user
 
 app.get("/api/expenses", async (req, res) => {
-  // Check if the user is authenticated
+  //check if the user is authenticated
   if (!req.session.userId) {
     return res.status(401).send("Unauthorized");
   }
   try {
-    //Query to get all expenses for the user, ordered by date
-    const expenses = await pool.query(
+    //query to get all expenses from the user, ordered by date
+    const expensesResult = await pool.query(
       "SELECT * FROM expenses WHERE user_id = $1 ORDER BY date DESC",
       [req.session.userId]
     );
-    res.status("200").json(expenses.rows);
+    //convert amount from string to a number for frontend
+    const expenses = expensesResult.rows.map((expense) => {
+      return {
+        ...expense,
+        amount: parseFloat(expense.amount),
+      };
+    });
+    res.status(200).json(expenses);
   } catch (err) {
     console.error(err);
     res.status(500).send("Server error");
   }
 });
 
-//POST route to create a new expense for the logged-in user
+// POST route to create a new expense
 app.post("/api/expenses", async (req, res) => {
-  //check if the user is authenticated
+  // Check if the user is authenticated
   if (!req.session.userId) {
     return res.status(401).send("Unauthorized");
   }
-  const { account_id, description, amount, date } = req.body;
-  //Basic validation
-  if (!account_id || !description || !amount || !date) {
+
+  const { description, amount, date, account_id } = req.body; // Validate input
+
+  if (!description || !amount || !date || !account_id) {
     return res.status(400).send("All expense fields are required.");
   }
-  //Convert amount to a number
+
   const numericAmount = parseFloat(amount);
   if (isNaN(numericAmount)) {
-    return res.status(400).send("Amount must be a valid number");
+    return res.status(400).send("Amount must be a valid number.");
   }
+
+  try {
+    // Start a transaction
+    await pool.query("BEGIN"); // Insert the new expense
+
+    const newExpense = await pool.query(
+      "INSERT INTO expenses (user_id, account_id, description, amount, date) VALUES ($1, $2, $3, $4, $5) RETURNING *",
+      [req.session.userId, account_id, description, numericAmount, date]
+    ); // Update the account balance by subtracting the expense amount
+
+    await pool.query(
+      "UPDATE accounts SET balance = balance - $1 WHERE id = $2 AND user_id = $3",
+      [numericAmount, account_id, req.session.userId]
+    ); // End the transaction
+
+    await pool.query("COMMIT");
+
+    res.status(201).json(newExpense.rows[0]);
+  } catch (err) {
+    await pool.query("ROLLBACK");
+    console.error("Error creating expense:", err);
+    res.status(500).send("Server error");
+  }
+});
+
+// POST route to create a new account
+app.post("/api/accounts", async (req, res) => {
+  if (!req.session.userId) {
+    return res.status(401).send("Unauthorized");
+  }
+  const { account_name, balance } = req.body;
+
+  // Validate the inputs
+  if (!account_name) {
+    return res.status(400).send("Account name is required.");
+  }
+
+  // This is the crucial fix: Ensure balance is a valid number
+  const numericBalance = parseFloat(balance);
+  if (isNaN(numericBalance)) {
+    return res.status(400).send("Initial balance must be a valid number.");
+  }
+
   try {
     await pool.query(
-      "INSERT INTO expenses (user_id, account_id, description, amount, date) VALUES ($1, $2, $3, $4, $5)",
-      [req.session.userId, account_id, description, amount, date]
+      "INSERT INTO accounts (user_id, account_name, balance) VALUES ($1, $2, $3)",
+      [req.session.userId, account_name, numericBalance]
     );
-    //update the balance of the associated account
-    await pool.query(
-      "UPDATE accounts SET balance = balance - $1 WHERE id=$2 AND user_id = $3",
-      [numericAmount, account_id, req.session.userId]
-    );
-    res
-      .status(201)
-      .send(
-        "Expense added successfully and account balance updated succesfully"
-      );
+    res.status(201).send("Account created successfully!");
   } catch (err) {
     console.error(err);
     res.status(500).send("Server error");
@@ -269,7 +303,7 @@ app.delete("/api/expenses/:id", async (req, res) => {
   try {
     //first, get the expense, update the account balance
     const expenseToDelete = await pool.query(
-      "SELECT amount, account_id FROM expenses WHERE id = $1AND  user_id = $2",
+      "SELECT amount, account_id FROM expenses WHERE id = $1 AND user_id = $2",
       [expenseId, req.session.userId]
     );
     if (expenseToDelete.rows.length === 0) {
@@ -346,6 +380,7 @@ app.put("/api/expenses/:id", async (req, res) => {
     res.status(200).send("Expense updated and account balance adjusted!");
   } catch (err) {
     console.error(err);
+    res.status(500).send("Server error");
   }
 });
 
