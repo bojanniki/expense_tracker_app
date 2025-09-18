@@ -1,37 +1,54 @@
--- db/setup.sql
+-- Clean up existing tables to start fresh
+DROP TABLE IF EXISTS expenses;
+DROP TABLE IF EXISTS accounts;
+DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS session;
+DROP TABLE IF EXISTS categories;
 
--- users table setup
-CREATE TABLE IF NOT EXISTS users (
+-- Create a table for storing user information
+CREATE TABLE users (
     id SERIAL PRIMARY KEY,
-    username TEXT UNIQUE NOT NULL,
-    password_hash TEXT NOT NULL
-);  -- FIX 1: Add a semicolon
-
-CREATE TABLE accounts (
-    id SERIAL PRIMARY KEY,
-    user_id INT NOT NULL REFERENCES users(id),
-    account_name VARCHAR(255) NOT NULL,
-    balance DECIMAL(10, 2) DEFAULT 0.00
+    username VARCHAR(50) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- expenses table setup
-CREATE TABLE IF NOT EXISTS expenses (
+-- Create a table for storing user session data
+CREATE TABLE "session" (
+    "sid" VARCHAR NOT NULL COLLATE "default",
+    "sess" JSON NOT NULL,
+    "expire" TIMESTAMPTZ(6) NOT NULL
+);
+
+ALTER TABLE "session" ADD CONSTRAINT "session_pkey" PRIMARY KEY ("sid") NOT DEFERRABLE INITIALLY IMMEDIATE;
+CREATE INDEX "IDX_session_expire" ON "session" ("expire");
+
+-- Create a table for storing financial accounts
+CREATE TABLE accounts (
     id SERIAL PRIMARY KEY,
-    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    -- FIX 2: Change "account id" to "account_id" to remove the space
-    account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
-    description TEXT NOT NULL,
+    user_id INT REFERENCES users(id) ON DELETE CASCADE,
+    account_name VARCHAR(255) NOT NULL,
+    balance NUMERIC(10, 2) NOT NULL DEFAULT 0.00,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- Create a table for storing expense categories
+CREATE TABLE categories (
+    id SERIAL PRIMARY KEY,
+    user_id INT REFERENCES users(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    UNIQUE (user_id, name)
+);
+
+-- Create a table for storing expenses and income
+CREATE TABLE expenses (
+    id SERIAL PRIMARY KEY,
+    user_id INT REFERENCES users(id) ON DELETE CASCADE,
+    account_id INT REFERENCES accounts(id) ON DELETE SET NULL,
+    category_id INT REFERENCES categories(id) ON DELETE SET NULL, -- for future feature
+    description VARCHAR(255) NOT NULL,
     amount NUMERIC(10, 2) NOT NULL,
     date DATE NOT NULL,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);  -- FIX 1: Add a semicolon
-
--- For express-session with connect-pg-simple
-CREATE TABLE "session" (
-    "sid" varchar NOT NULL COLLATE "default",
-    "sess" json NOT NULL,
-    "expire" timestamp(6) NOT NULL
-)
-WITH (OIDS=FALSE);  -- FIX 1: Add a semicolon (it was missing in your original code)
-ALTER TABLE "session" ADD CONSTRAINT "session_ok" PRIMARY KEY ("sid") NOT DEFERRABLE INITIALLY IMMEDIATE; -- FIX 1: Add a semicolon
-CREATE INDEX "IDX_session_expire" ON "session" ("expire"); -- FIX 1: Add a semicolon
+    transaction_type VARCHAR(20) NOT NULL DEFAULT 'expense',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);

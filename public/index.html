@@ -66,6 +66,10 @@
       <hr />
       <h3>Your Expenses</h3>
       <form id="add-expense-form">
+        <select id="transaction-type" required>
+          <option value="expense">Expense</option>
+          <option value="income">Income</option>
+        </select>
         <input
           type="text"
           id="expense-description"
@@ -81,7 +85,7 @@
         />
         <input type="date" id="expense-date" required />
         <select id="expense-account-id" required></select>
-        <button type="submit" id="add-expense-button">Add Expense</button>
+        <button type="submit" id="add-expense-button">Add Transaction</button>
       </form>
       <ul id="expenses-list"></ul>
     </div>

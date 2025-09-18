@@ -220,44 +220,49 @@ app.get("/api/expenses", async (req, res) => {
   }
 });
 
-// POST route to create a new expense
+// POST route to create a new expense or income
 app.post("/api/expenses", async (req, res) => {
-  // Check if the user is authenticated
+  //check if the user is authenticated
   if (!req.session.userId) {
     return res.status(401).send("Unauthorized");
   }
 
-  const { description, amount, date, account_id } = req.body; // Validate input
+  const { description, amount, date, account_id, type } = req.body; //NEW: destructure "type"
 
-  if (!description || !amount || !date || !account_id) {
-    return res.status(400).send("All expense fields are required.");
+  //Validate input
+  if (!description || !amount || !date || !account_id || !type) {
+    return res.status(400).send("All transaction fields are required");
   }
-
   const numericAmount = parseFloat(amount);
   if (isNaN(numericAmount)) {
-    return res.status(400).send("Amount must be a valid number.");
+    return res.status(400).send("Amount must be a valid number");
   }
 
+  //Determine the amount modifier based on transaction type
+  const sign = type === "income" ? 1 : -1;
+  const finalAmount = numericAmount * sign;
+
   try {
-    // Start a transaction
-    await pool.query("BEGIN"); // Insert the new expense
+    //start a transaction
+    await pool.query("BEGIN");
 
+    //Insert the new expense
     const newExpense = await pool.query(
-      "INSERT INTO expenses (user_id, account_id, description, amount, date) VALUES ($1, $2, $3, $4, $5) RETURNING *",
-      [req.session.userId, account_id, description, numericAmount, date]
-    ); // Update the account balance by subtracting the expense amount
-
+      "INSERT INTO expenses (user_id, account_id, description, amount, date, transaction_type) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *",
+      [req.session.userId, account_id, description, numericAmount, date, type]
+    );
+    //Update the account balance
     await pool.query(
-      "UPDATE accounts SET balance = balance - $1 WHERE id = $2 AND user_id = $3",
-      [numericAmount, account_id, req.session.userId]
-    ); // End the transaction
+      "UPDATE accounts SET balance = balance + $1 WHERE id = $2 AND user_id = $3",
+      [finalAmount, account_id, req.session.userId]
+    );
 
+    //END the transaction
     await pool.query("COMMIT");
-
     res.status(201).json(newExpense.rows[0]);
   } catch (err) {
     await pool.query("ROLLBACK");
-    console.error("Error creating expense:", err);
+    console.error("Error creating transaction:", err);
     res.status(500).send("Server error");
   }
 });
@@ -293,6 +298,7 @@ app.post("/api/accounts", async (req, res) => {
 });
 
 //DELETE route to delete a specific expense
+//DELETE route to delete a specific expense
 app.delete("/api/expenses/:id", async (req, res) => {
   //check if the user is authenticated
   if (!req.session.userId) {
@@ -301,84 +307,119 @@ app.delete("/api/expenses/:id", async (req, res) => {
 
   const expenseId = req.params.id;
   try {
-    //first, get the expense, update the account balance
+    // Start a transaction
+    await pool.query("BEGIN"); //first, get the expense to reverse the balance update
+
     const expenseToDelete = await pool.query(
-      "SELECT amount, account_id FROM expenses WHERE id = $1 AND user_id = $2",
+      "SELECT amount, account_id, transaction_type FROM expenses WHERE id = $1 AND user_id = $2",
       [expenseId, req.session.userId]
     );
     if (expenseToDelete.rows.length === 0) {
-      return res.status(404).send("Expense not found or unauthorized");
+      await pool.query("ROLLBACK");
+      return res.status(404).send("Transaction not found or unauthorized");
     }
-    const { amount, account_id } = expenseToDelete.rows[0];
-    await pool.query("DELETE FROM EXPENSES WHERE id=$1", [expenseId]);
-    //add the amount back to the account balance
+
+    const { amount, account_id, transaction_type } = expenseToDelete.rows[0];
+
+    // Determine the amount to add back based on transaction type
+    const sign = transaction_type === "income" ? -1 : 1;
+    const finalAmount = amount * sign; // Then, delete the expense
+
+    await pool.query("DELETE FROM expenses WHERE id=$1", [expenseId]);
+    // Add the amount back to the account balance
     await pool.query(
       "UPDATE accounts SET balance = balance + $1 WHERE id = $2",
-      [amount, account_id]
+      [finalAmount, account_id]
     );
+
+    // End the transaction
+    await pool.query("COMMIT");
     res
       .status(200)
-      .send("Expense deleted and account balance updated successfully");
+      .send("Transaction deleted and account balance updated successfully");
   } catch (err) {
+    await pool.query("ROLLBACK");
     console.error(err);
     res.status(500).send("Server error");
   }
 });
-
 //PUT route to update a specific expense
 app.put("/api/expenses/:id", async (req, res) => {
-  //Check if the user is authenticated
+  //check if the user is authenticated
   if (!req.session.userId) {
     return res.status(401).send("Unauthorized");
   }
   const expenseId = req.params.id;
-  const { account_id, description, amount, date } = req.body;
+  const { account_id, description, amount, date, type } = req.body; //NEW: destructure type
 
   //basic validation
-  if (!account_id || !description || !amount || !date) {
-    return res.status(400).send("All expense fields are required");
+  if (!account_id || !description || !amount || !date || !type) {
+    return res.status(400).send("All transaction fields are required");
   }
   const numericAmount = parseFloat(amount);
   if (isNaN(numericAmount)) {
     return res.status(400).send("Amount must be a valid number.");
   }
   try {
-    //1. get the old expense data to adjust the balance correctly
+    //start a transaction
+    await pool.query("BEGIN");
+    //1. Get the old expense data to adjust the balance correctly
     const oldExpense = await pool.query(
-      "SELECT amount, account_id FROM expenses WHERE id= $1 AND user_id = $2",
+      "SELECT amount, account_id, transaction_type FROM expenses WHERE id = $1 AND user_id = $2",
       [expenseId, req.session.userId]
     );
     if (oldExpense.rows.length === 0) {
-      return res.status(404).send("Expense not found or unauthorized");
+      await pool.query("ROLLBACK");
+      return res.status(404).send("Transaction not found or unauthorized");
     }
-    const { amount: oldAmount, account_id: oldAccountId } = oldExpense.rows[0];
-    //2. Adjust the balance of the old account by adding the old amount back.
+    const {
+      amount: oldAmount,
+      account_id: oldAccountId,
+      transaction_type: oldType,
+    } = oldExpense.rows[0];
+
+    //Determine the amount to reverse based on the old type
+    const oldSing = oldType === "income" ? -1 : 1;
+    const oldFinalAmount = oldAmount * oldSing;
+
+    //2. Adjust the balance of the old account by adding the old amount back
     await pool.query(
       "UPDATE accounts SET balance = balance + $1 WHERE id = $2",
-      [oldAmount, oldAccountId]
+      [oldFinalAmount, oldAccountId]
     );
-    //3. Update the expense with the new data.
+
+    //3. Update the expense with the new data
     const result = await pool.query(
-      "UPDATE expenses SET account_id = $1, description = $2, amount = $3, date = $4 WHERE id = $5 AND user_id=$6 RETURNING *",
+      "UPDATE expenses SET account_id = $1, description = $2, amount = $3, date = $4, transaction_type = $5 WHERE id = $6 AND user_id=$7 RETURNING*",
       [
         account_id,
         description,
         numericAmount,
         date,
+        type,
         expenseId,
         req.session.userId,
       ]
     );
-    //4. Subtract the new ammount from the new account's balance.
+    //4. Subtract the new amount from the new account's balance
+    //Determine the amount to apply based on the new type
+    const newSign = type === "income" ? 1 : -1;
+    const newFinalAmount = numericAmount * newSign;
     await pool.query(
-      "UPDATE accounts SET balance = balance - $1 WHERE id = $2",
-      [numericAmount, account_id]
+      "UPDATE accounts SET balance = balance + $1 WHERE id = $2",
+      [newFinalAmount, account_id]
     );
+    //END the transaction
+
+    await pool.query("COMMIT");
+
     if (result.rows.length === 0) {
-      return res.status(404).send("Expense not found or unauthorized.");
+      await pool.query("ROLLBACK");
+      return res.status(404).send("Transaction not found or unauthorized");
     }
-    res.status(200).send("Expense updated and account balance adjusted!");
+    res.status(200).send("Transaction updated and account balance adjusted");
   } catch (err) {
+    await pool.query("ROLLBACK");
     console.error(err);
     res.status(500).send("Server error");
   }

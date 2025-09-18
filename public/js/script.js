@@ -115,17 +115,19 @@ addAccountForm.addEventListener("submit", async (e) => {
 addExpenseForm.addEventListener("submit", async (e) => {
   e.preventDefault();
 
+  const type = document.getElementById("transaction-type").value;
   const description = document.getElementById("expense-description").value;
   const amount = parseFloat(document.getElementById("expense-amount").value);
   const date = document.getElementById("expense-date").value;
   const accountId = document.getElementById("expense-account-id").value;
 
-  if (!description || !amount || !date || !accountId) {
-    alert("Please fill out all fields.");
+  if (!type || !description || !amount || !date || !accountId) {
+    alert("Please fill out all fields!");
     return;
   }
 
   const expenseData = {
+    type, //NEW: include the transaction type
     description,
     amount,
     date,
@@ -135,39 +137,39 @@ addExpenseForm.addEventListener("submit", async (e) => {
   try {
     let response;
     if (editingExpenseId) {
-      // If we have an ID, we are updating (PUT request)
+      //if we have an ID, we are updating (PUT request)
       response = await fetch(`/api/expenses/${editingExpenseId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(expenseData),
       });
     } else {
-      // Otherwise, we are adding a new expense (POST request)
+      //otherwise, we are adding a new expense (POST request)
       response = await fetch("/api/expenses", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(expenseData),
       });
     }
-
     if (response.ok) {
-      alert(`Expense ${editingExpenseId ? "updated" : "added"} successfully!`);
+      alert(
+        `Transaction ${editingExpenseId ? "updated" : "added"} successfully`
+      );
       addExpenseForm.reset();
       editingExpenseId = null;
-      addExpenseButton.textContent = "Add Expense";
+      addExpenseButton.textContent = "Add Transaction";
       fetchExpenses();
       fetchAccounts();
     } else {
       const message = await response.text();
-      console.error("Failed to save expense:", message);
+      console.error("Failed to save transaction:", message);
       alert(`Error: ${message}`);
     }
   } catch (err) {
-    console.error("An error occurred while saving expense:", err);
+    console.error("An error occurred while saving transaction", err);
     alert("An error occurred. Please check the console for details.");
   }
 });
-
 //event listener for delete and edit buttons using event delegation
 expensesList.addEventListener("click", async (e) => {
   //check if the clicked element has the delete button class
