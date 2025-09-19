@@ -4,6 +4,7 @@ const loginForm = document.getElementById("login-form");
 const regMessage = document.getElementById("reg-message");
 const loginMessage = document.getElementById("login-message");
 const statusMessage = document.getElementById("status-message");
+const addCategoryForm = document.getElementById("add-category-form");
 
 //elements for the dashboard
 const authContainer = document.getElementById("auth-container");
@@ -18,6 +19,7 @@ const expenseAccountSelect = document.getElementById("expense-account-id");
 const addExpenseForm = document.getElementById("add-expense-form");
 const expensesList = document.getElementById("expenses-list");
 const addExpenseButton = addExpenseForm.querySelector('button[type="submit"]');
+const categoriesList = document.getElementById("expense-category-id");
 
 //a global variable to track the expense being edited
 let editingExpenseId = null;
@@ -38,6 +40,8 @@ const checkAuthStatus = async () => {
       fetchAccounts();
       //NEW: fetch and display expenses
       fetchExpenses();
+      //NEW: fetch and display categories
+      fetchAccounts();
     } else {
       //user is not logged in, show auth forms
       authContainer.style.display = "block";
@@ -76,6 +80,30 @@ const fetchAccounts = async () => {
     }
   } catch (err) {
     console.error("Failed to fetch accounts:", err);
+  }
+};
+
+//function to fetch categories
+//store categories in a global map for easy lookup
+let categoriesMap = new Map();
+
+const fetchCategories = async () => {
+  try {
+    const response = await fetch("/api/categories");
+    if (response.ok) {
+      const categories = await response.json();
+      categoriesList.innerHTML = "";
+      categoriesMap.clear(); //clear the map before repopulating
+      categories.forEach((category) => {
+        const option = document.createElement("option");
+        option.value = category.id;
+        option.textContent = category.name;
+        categoriesList.appendChild(option);
+        categoriesMap.set(category.id, category.name); // store ID => Nmae
+      });
+    }
+  } catch (err) {
+    console.error("Failed to fetch categories:", err);
   }
 };
 
@@ -120,8 +148,9 @@ addExpenseForm.addEventListener("submit", async (e) => {
   const amount = parseFloat(document.getElementById("expense-amount").value);
   const date = document.getElementById("expense-date").value;
   const accountId = document.getElementById("expense-account-id").value;
+  const categoryId = document.getElementById("expense-category-id").value;
 
-  if (!type || !description || !amount || !date || !accountId) {
+  if (!type || !description || !amount || !date || !accountId || !categoryId) {
     alert("Please fill out all fields!");
     return;
   }
@@ -132,6 +161,7 @@ addExpenseForm.addEventListener("submit", async (e) => {
     amount,
     date,
     account_id: accountId,
+    category_id: categoryId,
   };
 
   try {
@@ -224,6 +254,30 @@ expensesList.addEventListener("click", async (e) => {
       //scroll to the form
       addExpenseForm.scrollIntoView({ behavior: "smooth" });
     }
+  }
+});
+
+//event listener for the add category form
+addCategoryForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const categoryNameInput = document.getElementById("category-name");
+  const name = categoryNameInput.value;
+  try {
+    const response = await fetch("/api/categories", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    if (response.ok) {
+      alert("Category added successfully!");
+      categoryNameInput.value = "";
+      fetchCategories();
+    } else {
+      const error = await response.text;
+      alert(`Error adding category: ${error}`);
+    }
+  } catch (err) {
+    console.error("An error occurred while adding category:", err);
   }
 });
 

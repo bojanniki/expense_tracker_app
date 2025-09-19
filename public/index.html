@@ -70,6 +70,7 @@
           <option value="expense">Expense</option>
           <option value="income">Income</option>
         </select>
+        <select id="expense-category-id" required></select>
         <input
           type="text"
           id="expense-description"
@@ -87,6 +88,18 @@
         <select id="expense-account-id" required></select>
         <button type="submit" id="add-expense-button">Add Transaction</button>
       </form>
+      <section id="category-management">
+        <h2>Manage Categories</h2>
+        <form id="add-category-form">
+          <input
+            type="text"
+            id="category-name"
+            placeholder="New Category Name"
+            required
+          />
+          <button type="submit">Add Category</button>
+        </form>
+      </section>
       <ul id="expenses-list"></ul>
     </div>
     <script src="/js/script.js"></script>

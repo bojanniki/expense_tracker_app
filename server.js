@@ -191,6 +191,48 @@ app.get("/api/accounts", async (req, res) => {
   }
 });
 
+// --- Category API routes --- //
+//POST route to create a new category
+app.post("/api/categories", async (req, res) => {
+  if (!req.session.userId) {
+    return res.status(401).send("Unauthorized");
+  }
+  const { name } = req.body;
+  if (!name) {
+    return res.status(400).send("Category name is required");
+  }
+  try {
+    const newCategory = await pool.query(
+      "INSERT INTO categories (user_id, name) VALUES ($1, $2) ON CONFLICT (user_id, name) DO NOTHING RETURNING *",
+      [req.session.userId, name]
+    );
+    if (newCategory.rows.length === 0) {
+      return res.status(409).send("Category already exists.");
+    }
+    res.status(201).json(newCategory.rows[0]);
+  } catch (err) {
+    console.error("Error creating category:", err);
+    res.status(500).send("Server error");
+  }
+});
+
+//GET route to fetch all categories for the logged-in user
+app.get("/api/categories", async (req, res) => {
+  if (!req.session.userId) {
+    return res.status(401).send("Unauthorized");
+  }
+  try {
+    const categories = await pool.query(
+      "SELECT * FROM categories WHERE user_id = $1 ORDER BY name ASC",
+      [req.session.userId]
+    );
+    res.status(200).json(categories.rows);
+  } catch (err) {
+    console.error("Error fetching categories:", err);
+    res.status(500).send("Server error");
+  }
+});
+
 // --- Expense API routes --- //
 
 //GET route to fetch all expenses for the logged-in user
